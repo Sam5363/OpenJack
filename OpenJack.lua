@@ -159,85 +159,88 @@ local function askBet()
   return math.floor(bet)
 end
 
-
 local function game()
-  while budget > 0 do
-    currentBet = askBet()
-    local deck = createDeck()
-    local player, dealer = {}, {}
+  while true do
+    budget = 200
+    while budget > 0 do
+      currentBet = askBet()
+      local deck = createDeck()
+      local player, dealer = {}, {}
 
-    table.insert(player, table.remove(deck))
-    table.insert(dealer, table.remove(deck))
-    table.insert(player, table.remove(deck))
-    table.insert(dealer, table.remove(deck))
+      table.insert(player, table.remove(deck))
+      table.insert(dealer, table.remove(deck))
+      table.insert(player, table.remove(deck))
+      table.insert(dealer, table.remove(deck))
 
-    local gameOver = false
-    while not gameOver do
-      clearScreen()
-      gpu.setForeground(colors.bar)
-      gpu.set(2, 1, "Budget: $" .. budget .. "   Bet: $" .. currentBet)
-      drawHand("Dealer", {dealer[1]}, 2, 3)
-      drawHand("Player", player, 2, 11)
-      drawButtons("play")
+      local gameOver = false
+      while not gameOver do
+        clearScreen()
+        gpu.setForeground(colors.bar)
+        gpu.set(2, 1, "Budget: $" .. budget .. "   Bet: $" .. currentBet)
+        drawHand("Dealer", {dealer[1]}, 2, 3)
+        drawHand("Player", player, 2, 11)
+        drawButtons("play")
 
-      if handValue(player) > 21 then
+        if handValue(player) > 21 then
+          gpu.setForeground(colors.lose)
+          gpu.set(2, 20, "You busted! Dealer wins.")
+          budget = budget - currentBet
+          beep(220, 0.2)
+          gameOver = true
+          break
+        end
+
+        local action = waitForClick("play")
+        if action == "exit" then return end
+        beep(800, 0.05)
+        if action == "hit" then
+          table.insert(player, table.remove(deck))
+        elseif action == "stand" then
+          break
+        end
+      end
+
+      if handValue(player) <= 21 then
+        while handValue(dealer) < 17 do
+          table.insert(dealer, table.remove(deck))
+        end
+
+        clearScreen()
+        gpu.setForeground(colors.bar)
+        gpu.set(2, 1, "Budget: $" .. budget .. "   Bet: $" .. currentBet)
+        drawHand("Dealer", dealer, 2, 3)
+        drawHand("Player", player, 2, 11)
+
+        local pv, dv = handValue(player), handValue(dealer)
+
+        if dv > 21 or pv > dv then
+          gpu.setForeground(colors.win)
+          gpu.set(2, 20, "You win! +$" .. currentBet)
+          budget = budget + currentBet
+          beep(1000, 0.2)
+        elseif dv > pv then
+          gpu.setForeground(colors.lose)
+          gpu.set(2, 20, "Dealer wins! -$" .. currentBet)
+          budget = budget - currentBet
+          beep(220, 0.2)
+        else
+          gpu.setForeground(colors.fg)
+          gpu.set(2, 20, "Push (tie).")
+          beep(440, 0.2)
+        end
+      end
+
+      if budget <= 0 then
         gpu.setForeground(colors.lose)
-        gpu.set(2, 20, "You busted! Dealer wins.")
-        budget = budget - currentBet
-        beep(220, 0.2)
-        gameOver = true
+        gpu.set(2, 23, "You're broke! Restarting game...")
+        os.sleep(2)
         break
       end
 
-      local action = waitForClick("play")
-      if action == "exit" then return end
-      beep(800, 0.05)
-      if action == "hit" then
-        table.insert(player, table.remove(deck))
-      elseif action == "stand" then
-        break
-      end
+      drawButtons("end")
+      local action = waitForClick("end")
+      if action == "exit" or action ~= "again" then return end
     end
-
-    if handValue(player) <= 21 then
-      while handValue(dealer) < 17 do
-        table.insert(dealer, table.remove(deck))
-      end
-
-      clearScreen()
-      gpu.setForeground(colors.bar)
-      gpu.set(2, 1, "Budget: $" .. budget .. "   Bet: $" .. currentBet)
-      drawHand("Dealer", dealer, 2, 3)
-      drawHand("Player", player, 2, 11)
-
-      local pv, dv = handValue(player), handValue(dealer)
-
-      if dv > 21 or pv > dv then
-        gpu.setForeground(colors.win)
-        gpu.set(2, 20, "You win! +$" .. currentBet)
-        budget = budget + currentBet
-        beep(1000, 0.2)
-      elseif dv > pv then
-        gpu.setForeground(colors.lose)
-        gpu.set(2, 20, "Dealer wins! -$" .. currentBet)
-        budget = budget - currentBet
-        beep(220, 0.2)
-      else
-        gpu.setForeground(colors.fg)
-        gpu.set(2, 20, "Push (tie).")
-        beep(440, 0.2)
-      end
-    end
-
-    if budget <= 0 then
-      gpu.setForeground(colors.lose)
-      gpu.set(2, 23, "You're broke! Game over.")
-      break
-    end
-
-    drawButtons("end")
-    local action = waitForClick("end")
-    if action == "exit" or action ~= "again" then break end
   end
 end
 
