@@ -1,5 +1,6 @@
 # OpenJack
-Terrible half playable blackjack for Opencomputers
+Half playable blackjack for Opencomputers
+This program is 100% not the best out there but i wanted to make my own so i did.
 
-Do not expect the code to be good or legible this was made as a default application for NikoDE.
-But it works. and its kinda fun. Could use some fixes but its what i got.
+This game was designed as a bundle-in game for the NikoDE Desktop Environment so being lightweight was a priority.
+You may use this program for whatever its not exclusive in the slightest (if it was why would i post it to git) no credit required.
