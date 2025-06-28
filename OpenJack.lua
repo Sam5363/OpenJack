@@ -12,97 +12,60 @@ if w < 80 or h < 25 then
 end
 
 local colors = {
-  bg = 0x2C2C2C,
-  fg = 0xDDDDDD,
-  border = 0xFFFFFF,
-  value = 0xFFFF44,
-  red = 0xFF4444,
-  black = 0xFFFFFF,
-  button = 0x007ACC,
-  win = 0x00FF00,
-  lose = 0xFF0000,
-  bar = 0x00FFFF,
+  bg = 0x2C2C2C, fg = 0xDDDDDD, border = 0xFFFFFF,
+  value = 0xFFFF44, red = 0xFF4444, black = 0xFFFFFF,
+  button = 0x007ACC, win = 0x00FF00, lose = 0xFF0000,
+  bar = 0x00FFFF
 }
 
 local suits = {"♠", "♥", "♦", "♣"}
 local ranks = {"A","2","3","4","5","6","7","8","9","10","J","Q","K"}
+local budget, currentBet = 200, 0
 
-local budget = 200
-local currentBet = 0
+local function beep(f, d) computer.beep(f or 1000, d or 0.05) end
 
-local function beep(freq, dur)
-  computer.beep(freq or 1000, dur or 0.05)
-end
+local function clear() gpu.setBackground(colors.bg) gpu.setForeground(colors.fg) gpu.fill(1,1,w,h," ") end
 
-local function clearScreen()
-  gpu.setBackground(colors.bg)
-  gpu.setForeground(colors.fg)
-  gpu.fill(1, 1, w, h, " ")
-end
-
-local function createDeck()
-  local deck = {}
-  for _, s in ipairs(suits) do
-    for _, r in ipairs(ranks) do
-      table.insert(deck, {rank = r, suit = s})
-    end
-  end
-  for i = #deck, 2, -1 do
-    local j = math.random(i)
-    deck[i], deck[j] = deck[j], deck[i]
-  end
-  return deck
-end
-
-local function cardValue(card)
-  if card.rank == "A" then return 11
-  elseif card.rank == "K" or card.rank == "Q" or card.rank == "J" then return 10
-  else return tonumber(card.rank) end
+local function cardValue(c)
+  if c.rank == "A" then return 11
+  elseif c.rank == "K" or c.rank == "Q" or c.rank == "J" then return 10
+  else return tonumber(c.rank) end
 end
 
 local function handValue(hand)
   local total, aces = 0, 0
-  for _, card in ipairs(hand) do
-    total = total + cardValue(card)
-    if card.rank == "A" then aces = aces + 1 end
+  for _, c in ipairs(hand) do
+    total = total + cardValue(c)
+    if c.rank == "A" then aces = aces + 1 end
   end
-  while total > 21 and aces > 0 do
-    total = total - 10
-    aces = aces - 1
-  end
+  while total > 21 and aces > 0 do total = total - 10 aces = aces - 1 end
   return total
 end
 
-local function drawCard(x, y, card)
-  local isRed = (card.suit == "♥" or card.suit == "♦")
-  local fgSuit = isRed and colors.red or colors.black
-
+local function drawCard(x, y, c)
+  local isRed = c.suit == "♥" or c.suit == "♦"
   gpu.setBackground(colors.bg)
   gpu.setForeground(colors.border)
   gpu.set(x, y, "╭─────╮")
   gpu.set(x, y+5, "╰─────╯")
   for i = 1, 4 do gpu.set(x, y+i, "│     │") end
-
   gpu.setForeground(colors.value)
-  gpu.set(x+1, y+1, card.rank)
-  gpu.set(x+6 - #card.rank, y+4, card.rank)
-
-  gpu.setForeground(fgSuit)
-  gpu.set(x+2, y+2, card.suit)
+  gpu.set(x+1, y+1, c.rank)
+  gpu.set(x+6-#c.rank, y+4, c.rank)
+  gpu.setForeground(isRed and colors.red or colors.black)
+  gpu.set(x+2, y+2, c.suit)
 end
 
 local function drawHand(title, hand, x, y)
   gpu.setForeground(colors.fg)
-  gpu.set(x, y-1, title .. " (" .. handValue(hand) .. "):")
-  for i, card in ipairs(hand) do
-    drawCard(x + (i-1)*8, y, card)
-  end
+  gpu.set(x, y-1, title.." ("..handValue(hand).."):")
+  for i, c in ipairs(hand) do drawCard(x + (i-1)*8, y, c) end
 end
 
 local function drawButtons(state)
   gpu.setBackground(colors.lose)
   gpu.setForeground(0xFFFFFF)
-  gpu.set(w - 6, 1, "[EXIT]")
+  gpu.set(w-6, 1, "[EXIT]")
   gpu.setBackground(colors.bg)
   gpu.setForeground(colors.fg)
   gpu.fill(1, 22, w, 1, " ")
@@ -125,38 +88,41 @@ local function waitForClick(state)
       if state == "play" then
         if x >= 2 and x <= 6 then return "hit"
         elseif x >= 10 and x <= 17 then return "stand" end
-      elseif state == "end" then
-        if x >= 20 and x <= 33 then return "again" end
-      end
-    elseif y == 1 and x >= w - 6 then
-      return "exit"
-    end
+      elseif state == "end" and x >= 20 and x <= 33 then return "again" end
+    elseif y == 1 and x >= w - 6 then return "exit" end
   end
 end
 
+local function createDeck()
+  local d = {}
+  for _, s in ipairs(suits) do for _, r in ipairs(ranks) do table.insert(d, {rank=r, suit=s}) end end
+  for i = #d, 2, -1 do local j = math.random(i) d[i], d[j] = d[j], d[i] end
+  return d
+end
+
 local function askBet()
-  clearScreen()
-  local centerX = math.floor(w / 2) - 8
+  clear()
+  local x = math.floor(w/2) - 8
   gpu.setForeground(colors.button)
-  gpu.set(centerX, 4, "╔══════════════════╗")
-  gpu.set(centerX, 5, "║     OpenJack     ║")
-  gpu.set(centerX, 6, "╚══════════════════╝")
-
+  gpu.set(x, 4, "╔══════════════════╗")
+  gpu.set(x, 5, "║     OpenJack     ║")
+  gpu.set(x, 6, "╚══════════════════╝")
   gpu.setForeground(colors.bar)
-  gpu.set(centerX, 10, "Your Budget: $" .. budget)
+  gpu.set(x, 10, "Your Budget: $" .. budget)
   gpu.setForeground(colors.fg)
-  
   local prompt = "Enter your bet: "
-  gpu.set(centerX, 12, prompt)
-
-  term.setCursor(centerX + #prompt, 12)
+  gpu.set(x, 12, prompt)
+  term.setCursor(x + #prompt, 12)
   io.write("")
   local bet = tonumber(io.read())
+  return (not bet or bet < 1 or bet > budget) and askBet() or math.floor(bet)
+end
 
-  if not bet or bet < 1 or bet > budget then
-    return askBet()
-  end
-  return math.floor(bet)
+local function printResult(msg, color, delta)
+  gpu.setForeground(color)
+  gpu.set(2, 20, msg)
+  if delta then budget = budget + delta end
+  beep(delta and (delta > 0 and 1000 or 220) or 440, 0.2)
 end
 
 local function game()
@@ -166,68 +132,64 @@ local function game()
       currentBet = askBet()
       local deck = createDeck()
       local player, dealer = {}, {}
-
       table.insert(player, table.remove(deck))
       table.insert(dealer, table.remove(deck))
       table.insert(player, table.remove(deck))
       table.insert(dealer, table.remove(deck))
 
-      local gameOver = false
-      while not gameOver do
-        clearScreen()
-        gpu.setForeground(colors.bar)
-        gpu.set(2, 1, "Budget: $" .. budget .. "   Bet: $" .. currentBet)
-        drawHand("Dealer", {dealer[1]}, 2, 3)
-        drawHand("Player", player, 2, 11)
-        drawButtons("play")
+      local pv, dv = handValue(player), handValue(dealer)
 
-        if handValue(player) > 21 then
-          gpu.setForeground(colors.lose)
-          gpu.set(2, 20, "You busted! Dealer wins.")
-          budget = budget - currentBet
-          beep(220, 0.2)
-          gameOver = true
-          break
-        end
-
-        local action = waitForClick("play")
-        if action == "exit" then return end
-        beep(800, 0.05)
-        if action == "hit" then
-          table.insert(player, table.remove(deck))
-        elseif action == "stand" then
-          break
-        end
-      end
-
-      if handValue(player) <= 21 then
-        while handValue(dealer) < 17 do
-          table.insert(dealer, table.remove(deck))
-        end
-
-        clearScreen()
+      if pv == 21 or dv == 21 then
+        clear()
         gpu.setForeground(colors.bar)
         gpu.set(2, 1, "Budget: $" .. budget .. "   Bet: $" .. currentBet)
         drawHand("Dealer", dealer, 2, 3)
         drawHand("Player", player, 2, 11)
 
-        local pv, dv = handValue(player), handValue(dealer)
-
-        if dv > 21 or pv > dv then
-          gpu.setForeground(colors.win)
-          gpu.set(2, 20, "You win! +$" .. currentBet)
-          budget = budget + currentBet
-          beep(1000, 0.2)
-        elseif dv > pv then
-          gpu.setForeground(colors.lose)
-          gpu.set(2, 20, "Dealer wins! -$" .. currentBet)
-          budget = budget - currentBet
-          beep(220, 0.2)
+        if pv == 21 and dv == 21 then
+          printResult("Both have Blackjack. Push (tie).", colors.fg)
+        elseif pv == 21 then
+          printResult("Blackjack! +$"..currentBet, colors.win, currentBet)
         else
-          gpu.setForeground(colors.fg)
-          gpu.set(2, 20, "Push (tie).")
-          beep(440, 0.2)
+          printResult("Dealer has Blackjack. -$"..currentBet, colors.lose, -currentBet)
         end
+
+        drawButtons("end")
+        if waitForClick("end") ~= "again" then return end
+        goto continue
+      end
+
+      local gameOver = false
+      while not gameOver do
+        clear()
+        gpu.setForeground(colors.bar)
+        gpu.set(2, 1, "Budget: $" .. budget .. "   Bet: $" .. currentBet)
+        drawHand("Dealer", {dealer[1]}, 2, 3)
+        drawHand("Player", player, 2, 11)
+        drawButtons("play")
+        if handValue(player) > 21 then
+          printResult("You busted! Dealer wins.", colors.lose, -currentBet)
+          gameOver = true
+          break
+        end
+        local a = waitForClick("play")
+        if a == "exit" then return end
+        beep(800, 0.05)
+        if a == "hit" then table.insert(player, table.remove(deck))
+        elseif a == "stand" then break end
+      end
+
+      if handValue(player) <= 21 then
+        while handValue(dealer) < 17 do table.insert(dealer, table.remove(deck)) end
+        clear()
+        gpu.setForeground(colors.bar)
+        gpu.set(2, 1, "Budget: $" .. budget .. "   Bet: $" .. currentBet)
+        drawHand("Dealer", dealer, 2, 3)
+        drawHand("Player", player, 2, 11)
+        local pv, dv = handValue(player), handValue(dealer)
+        if dv > 21 or pv > dv then printResult("You win! +$"..currentBet, colors.win, currentBet)
+        elseif dv > pv then printResult("Dealer wins! -$"..currentBet, colors.lose, -currentBet)
+        else printResult("Push (tie).", colors.fg) end
       end
 
       if budget <= 0 then
@@ -238,11 +200,12 @@ local function game()
       end
 
       drawButtons("end")
-      local action = waitForClick("end")
-      if action == "exit" or action ~= "again" then return end
+      local a = waitForClick("end")
+      if a == "exit" or a ~= "again" then return end
+      ::continue::
     end
   end
 end
 
-clearScreen()
+clear()
 game()
