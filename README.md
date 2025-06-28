@@ -1,5 +1,5 @@
 # OpenJack
-Half playable blackjack for Opencomputers
+Blackjack for Opencomputers
 
 This program is 100% not the best out there but i wanted to make my own so i did.
 
